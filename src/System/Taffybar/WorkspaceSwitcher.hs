@@ -28,6 +28,7 @@ module System.Taffybar.WorkspaceSwitcher (
 import Control.Monad
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.IORef
+import Data.List ((\\))
 import Graphics.UI.Gtk
 import Graphics.X11.Xlib.Extras
 
@@ -75,7 +76,7 @@ type Workspace = (Label, String)
 -- its source of events.
 wspaceSwitcherNew :: Pager -> IO Widget
 wspaceSwitcherNew pager = do
-  desktop <- getDesktop
+  desktop <- getDesktop pager
   widget  <- assembleWidget desktop
   idxRef  <- newIORef []
   let cfg = config pager
@@ -88,10 +89,10 @@ wspaceSwitcherNew pager = do
 -- | Return a list of two-element tuples, one for every workspace,
 -- containing the Label widget used to display the name of that specific
 -- workspace and a String with its default (unmarked) representation.
-getDesktop :: IO Desktop
-getDesktop = do
+getDesktop :: Pager -> IO Desktop
+getDesktop pager = do
   names  <- withDefaultCtx getWorkspaceNames
-  labels <- toLabels names
+  labels <- toLabels $ map (hiddenWorkspace $ config pager) names
   return $ zip labels names
 
 -- | Build the graphical representation of the widget.
@@ -128,7 +129,11 @@ urgentCallback cfg desktop event = withDefaultCtx $ do
 
 -- | Convert the given list of Strings to a list of Label widgets.
 toLabels :: [String] -> IO [Label]
-toLabels = sequence . map (labelNew . Just)
+toLabels = sequence . map labelNewMarkup
+  where labelNewMarkup markup = do
+          label <- labelNew Nothing
+          labelSetMarkup label markup
+          return label
 
 -- | Build a new clickable event box containing the Label widget that
 -- corresponds to the given index, and add it to the given container.
@@ -144,17 +149,27 @@ addButton hbox desktop idx = do
   containerAdd ebox label
   boxPackStart hbox ebox PackNatural 0
 
+allWorkspaces :: Desktop -> [Int]
+allWorkspaces desktop = [0 .. length desktop - 1]
+
+emptyWorkspaces :: Desktop -> IO [Int]
+emptyWorkspaces desktop = withDefaultCtx $ do
+  allWindows <- getWindows
+  nonEmptyWorkspaces <- mapM getWorkspace allWindows
+  return $ allWorkspaces desktop \\ nonEmptyWorkspaces
+
 -- | Perform all changes needed whenever the active workspace changes.
 transition :: PagerConfig -- ^ Configuration settings.
            -> Desktop -- ^ All available Labels with their default values.
            -> [Int] -- ^ Previously visible workspaces (first was active).
            -> [Int] -- ^ Currently visible workspaces (first is active).
            -> IO ()
-transition cfg desktop prev curr =
-  when (curr /= prev) $ do
-    mapM_ (mark desktop id) prev
-    mark desktop (activeWorkspace cfg) (head curr)
-    mapM_ (mark desktop $ visibleWorkspace cfg) (tail curr)
+transition cfg desktop prev curr = do
+  empty <- emptyWorkspaces desktop
+  mapM_ (mark desktop $ hiddenWorkspace cfg) $ allWorkspaces desktop
+  mapM_ (mark desktop $ emptyWorkspace cfg) empty
+  mark desktop (activeWorkspace cfg) (head curr)
+  mapM_ (mark desktop $ visibleWorkspace cfg) (tail curr)
 
 -- | Apply the given marking function to the Label of the workspace with
 -- the given index.

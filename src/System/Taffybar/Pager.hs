@@ -62,6 +62,8 @@ data PagerConfig = PagerConfig
   { activeWindow     :: String -> Markup -- ^ the name of the active window.
   , activeLayout     :: String -> Markup -- ^ the currently active layout.
   , activeWorkspace  :: String -> Markup -- ^ the currently active workspace.
+  , hiddenWorkspace  :: String -> Markup -- ^ inactive workspace with windows.
+  , emptyWorkspace   :: String -> Markup -- ^ inactive workspace with no windows.
   , visibleWorkspace :: String -> Markup -- ^ all other visible workspaces (Xinerama or XRandR).
   , urgentWorkspace  :: String -> Markup -- ^ workspaces containing windows with the urgency hint set.
   , widgetSep        :: Markup -- ^ separator to use between desktop widgets in 'TaffyPager'.
@@ -79,6 +81,8 @@ defaultPagerConfig   = PagerConfig
   { activeWindow     = colorize "green" "" . escape . shorten 40
   , activeLayout     = escape
   , activeWorkspace  = colorize "yellow" "" . wrap "[" "]" . escape
+  , hiddenWorkspace  = escape
+  , emptyWorkspace   = escape
   , visibleWorkspace = wrap "(" ")" . escape
   , urgentWorkspace  = colorize "red" "yellow" . escape
   , widgetSep        = " : "
